@@ -1,3 +1,4 @@
+import { UserPlan } from "@prisma/client";
 import type { GetStaticPaths, GetStaticPropsContext } from "next";
 import { z } from "zod";
 
@@ -18,7 +19,7 @@ export default function Type(props: AvailabilityPageProps) {
   const { t } = useLocale();
 
   return props.away ? (
-    <div className="h-screen dark:bg-gray-900">
+    <div className="h-screen dark:bg-neutral-900">
       <main className="mx-auto max-w-3xl px-4 py-24">
         <div className="space-y-6" data-testid="event-types">
           <div className="overflow-hidden rounded-sm border dark:border-gray-900">
@@ -75,6 +76,7 @@ async function getUserPageProps(context: GetStaticPropsContext) {
       id: true,
       username: true,
       away: true,
+      plan: true,
       name: true,
       hideBranding: true,
       timeZone: true,
@@ -130,23 +132,76 @@ async function getUserPageProps(context: GetStaticPropsContext) {
   ]);
 
   if (!user || !user.eventTypes.length) return { notFound: true };
+  
+    const [eventType]: ((typeof user.eventTypes)[number] & {
+      users: Pick<User, "name" | "username" | "hideBranding" | "timeZone">[];
+    })[] = [
+      {
+        ...user.eventTypes[0],
+        users: [
+          {
+            name: user.name,
+            username: user.username,
+            hideBranding: user.hideBranding,
+            timeZone: user.timeZone,
+          },
+        ],
+      },
+    ];
+    
 
-  const [eventType]: ((typeof user.eventTypes)[number] & {
-    users: Pick<User, "name" | "username" | "hideBranding" | "timeZone">[];
-  })[] = [
-    {
-      ...user.eventTypes[0],
-      users: [
-        {
-          name: user.name,
-          username: user.username,
-          hideBranding: user.hideBranding,
-          timeZone: user.timeZone,
-        },
-      ],
+    /*
+  const eventTypeIds = user.eventTypes.map((e) => e.id);
+  const eventTypes = await prisma.eventType.findMany({
+    where: {
+      slug,
+      
+      id: user.plan === UserPlan.FREE ? eventTypeIds[0] : undefined,
+      OR: [{ userId: user.id }, { users: { some: { id: user.id } } }],
     },
-  ];
+    // Order is important to ensure that given a slug if there are duplicates, we choose the same event type consistently when showing in event-types list UI(in terms of ordering and disabled event types)
+    // TODO: If we can ensure that there are no duplicates for a [slug, userId] combination in existing data, this requirement might be avoided.
+    orderBy: [
+      {
+        position: "desc",
+      },
+      {
+        id: "asc",
+      },
+    ],
+    select: {
+      title: true,
+      slug: true,
+      hidden: true,
+      recurringEvent: true,
+      length: true,
+      locations: true,
+      id: true,
+      description: true,
+      price: true,
+      currency: true,
+      requiresConfirmation: true,
+      schedulingType: true,
+      metadata: true,
+      seatsPerTimeSlot: true,
+      users: {
+        select: {
+          name: true,
+          username: true,
+          hideBranding: true,
+          brandColor: true,
+          darkBrandColor: true,
+          theme: true,
+          plan: true,
+          allowDynamicBooking: true,
+          timeZone: true,
+        },
+      },
+    },
+  });
 
+  const [eventType] = eventTypes;
+*/
   if (!eventType) return { notFound: true };
 
   //TODO: Use zodSchema to verify it instead of using Type Assertion
@@ -156,15 +211,23 @@ async function getUserPageProps(context: GetStaticPropsContext) {
     recurringEvent: parseRecurringEvent(eventType.recurringEvent),
     locations: privacyFilteredLocations(locations),
     descriptionAsSafeHTML: eventType.description ? md.render(eventType.description) : null,
+    users: eventType.users.map((user) => ({
+      name: user.name,
+      username: user.username,
+      hideBranding: user.hideBranding,
+      plan: user.plan,
+      timeZone: user.timeZone,
+    })),
   });
-  // Check if the user you are logging into has any active teams
-  const hasActiveTeam =
-    user.teams.filter((m) => {
-      if (!IS_TEAM_BILLING_ENABLED) return true;
-      const metadata = teamMetadataSchema.safeParse(m.team.metadata);
-      if (metadata.success && metadata.data?.subscriptionId) return true;
-      return false;
-    }).length > 0;
+  const profile = eventType.users[0] || user;
+   // Check if the user you are logging into has any active teams
+   const hasActiveTeam =
+   user.teams.filter((m) => {
+     if (!IS_TEAM_BILLING_ENABLED) return true;
+     const metadata = teamMetadataSchema.safeParse(m.team.metadata);
+     if (metadata.success && metadata.data?.subscriptionId) return true;
+     return false;
+   }).length > 0;
 
   return {
     props: {
@@ -172,12 +235,17 @@ async function getUserPageProps(context: GetStaticPropsContext) {
       profile: {
         ...eventType.users[0],
         theme: user.theme,
+        name: user.name,
+        username: user.username,
+        hideBranding: user.hideBranding,
+        plan: user.plan,
+        timeZone: user.timeZone,
         allowDynamicBooking: false,
         weekStart: user.weekStart,
         brandColor: user.brandColor,
         darkBrandColor: user.darkBrandColor,
-        slug: `${user.username}/${eventType.slug}`,
-        image: `${WEBAPP_URL}/${user.username}/avatar.png`,
+        slug: `${profile.username}/${eventType.slug}`,
+        image: `${WEBAPP_URL}/${profile.username}/avatar.png`,
       },
       away: user?.away,
       isDynamic: false,
@@ -199,8 +267,8 @@ async function getDynamicGroupPageProps(context: GetStaticPropsContext) {
   );
   const { ssgInit } = await import("@server/lib/ssg");
   const { getAppFromSlug } = await import("@calcom/app-store/utils");
-
-  const ssg = await ssgInit(context);
+  
+    const ssg = await ssgInit(context);
   const { type: typeParam, user: userParam } = paramsSchema.parse(context.params);
   const usernameList = getUsernameList(userParam);
   const length = parseInt(typeParam);
@@ -239,6 +307,7 @@ async function getDynamicGroupPageProps(context: GetStaticPropsContext) {
         },
       },
       theme: true,
+      plan: true,
     },
   });
 
@@ -283,6 +352,7 @@ async function getDynamicGroupPageProps(context: GetStaticPropsContext) {
         name: user.name,
         username: user.username,
         hideBranding: user.hideBranding,
+        plan: user.plan,
         timeZone: user.timeZone,
       };
     }),
@@ -312,7 +382,6 @@ async function getDynamicGroupPageProps(context: GetStaticPropsContext) {
       isDynamic: true,
       away: false,
       trpcState: ssg.dehydrate(),
-      isBrandingHidden: false, // I think we should always show branding for dynamic groups - saves us checking every single user
     },
     revalidate: 10, // seconds
   };

@@ -4,7 +4,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import dayjs from "@calcom/dayjs";
 import { sendPasswordResetEmail } from "@calcom/emails";
 import { PASSWORD_RESET_EXPIRY_HOURS } from "@calcom/emails/templates/forgot-password-email";
-import { getTranslation } from "@calcom/lib/server/i18n";
+import { getTranslation } from "@server/lib/i18n";
 import prisma from "@calcom/prisma";
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -27,10 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
 
     if (!maybeUser) {
-      // Don't leak information about whether an email is registered or not
-      return res
-        .status(200)
-        .json({ message: "If this email exists in our system, you should receive a Reset email." });
+      return res.status(400).json({ message: "Couldn't find an account for this email" });
     }
 
     const maybePreviousRequest = await prisma.resetPasswordRequest.findMany({
@@ -66,14 +63,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     /** So we can test the password reset flow on CI */
     if (process.env.NEXT_PUBLIC_IS_E2E) {
-      return res.status(201).json({
-        message: "If this email exists in our system, you should receive a Reset email.",
-        resetLink,
-      });
+      return res.status(201).json({ message: "Reset Requested", resetLink });
     } else {
-      return res
-        .status(201)
-        .json({ message: "If this email exists in our system, you should receive a Reset email." });
+      return res.status(201).json({ message: "Reset Requested" });
     }
   } catch (reason) {
     // console.error(reason);

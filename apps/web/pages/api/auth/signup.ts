@@ -15,9 +15,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(403).json({ message: "Signup is disabled" });
     return;
   }
-
+  
   const data = req.body;
-  const { email, password } = data;
+  const { email, password, name } = data;
   const username = slugify(data.username);
   const userEmail = email.toLowerCase();
 
@@ -32,7 +32,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   if (!password || password.trim().length < 7) {
-    res.status(422).json({ message: "Invalid input - password should be at least 7 characters long." });
+    res.status(422).json({
+      message: "Invalid input - password should be at least 7 characters long.",
+    });
     return;
   }
 
@@ -43,7 +45,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       OR: [
         { username },
         {
-          AND: [{ email: userEmail }],
+          AND: [
+            { email: userEmail },
+            { password: { not: null } },
+            { username: { not: null } },
+          ],
         },
       ],
     },
@@ -51,7 +57,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (existingUser) {
     const message: string =
-      existingUser.email !== userEmail ? "Username already taken" : "Email address is already registered";
+      existingUser.email !== userEmail
+        ? "Username already taken"
+        : "Email address is already registered";
 
     return res.status(409).json({ message });
   }
@@ -67,10 +75,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       identityProvider: IdentityProvider.CAL,
     },
     create: {
+      name,
+      plan: "PRO",
       username,
       email: userEmail,
       password: hashedPassword,
       identityProvider: IdentityProvider.CAL,
+      timeZone: "America/Los_Angeles",
     },
   });
 

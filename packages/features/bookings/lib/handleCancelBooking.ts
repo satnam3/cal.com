@@ -119,16 +119,16 @@ async function handler(req: NextApiRequest & { userId?: number }) {
   });
 
   const attendeesListPromises = bookingToDelete.attendees.map(async (attendee) => {
-    return {
-      name: attendee.name,
-      email: attendee.email,
-      timeZone: attendee.timeZone,
-      language: {
-        translate: await getTranslation(attendee.locale ?? "en", "common"),
-        locale: attendee.locale ?? "en",
-      },
-    };
-  });
+      return {
+        name: attendee.name,
+        email: attendee.email,
+        timeZone: attendee.timeZone,
+        language: {
+          translate: await getTranslation(attendee.locale ?? "en", "common"),
+          locale: attendee.locale ?? "en",
+        },
+      };
+    });
 
   const attendeesList = await Promise.all(attendeesListPromises);
   const tOrganizer = await getTranslation(organizer.locale ?? "en", "common");
@@ -175,17 +175,19 @@ async function handler(req: NextApiRequest & { userId?: number }) {
   };
 
   const webhooks = await getWebhooks(subscriberOptions);
+  const artistCanceling = bookingToDelete && bookingToDelete.user.email == organizer.email ? "Artist" : "Client";
   const promises = webhooks.map((webhook) =>
-    sendPayload(webhook.secret, eventTrigger, new Date().toISOString(), webhook, {
-      ...evt,
-      ...eventTypeInfo,
-      status: "CANCELLED",
-      smsReminderNumber: bookingToDelete.smsReminderNumber || undefined,
-    }).catch((e) => {
-      console.error(`Error executing webhook for event: ${eventTrigger}, URL: ${webhook.subscriberUrl}`, e);
-    })
-  );
-  await Promise.all(promises);
+  sendPayload(webhook.secret, eventTrigger, new Date().toISOString(), webhook, {
+    ...evt,
+    ...eventTypeInfo,
+    status: "CANCELLED",
+    artistCanceling:artistCanceling,
+    smsReminderNumber: bookingToDelete.smsReminderNumber || undefined,
+  }).catch((e) => {
+    console.error(`Error executing webhook for event: ${eventTrigger}, URL: ${webhook.subscriberUrl}`, e);
+  })
+);
+await Promise.all(promises);
 
   //Workflows - schedule reminders
   if (bookingToDelete.eventType?.workflows) {
@@ -288,7 +290,7 @@ async function handler(req: NextApiRequest & { userId?: number }) {
   const apiDeletes = [];
 
   const bookingCalendarReference = bookingToDelete.references.find((reference) =>
-    reference.type.includes("_calendar")
+   reference.type.includes("_calendar")
   );
 
   if (bookingCalendarReference) {
@@ -323,7 +325,7 @@ async function handler(req: NextApiRequest & { userId?: number }) {
           apiDeletes.push(calendar?.deleteEvent(uid, evt, externalCalendarId) as Promise<unknown>);
         }
       }
-    } else {
+      } else {
       // For bookings made before the refactor we go through the old behaviour of running through each calendar credential
       bookingToDelete.user.credentials
         .filter((credential) => credential.type.endsWith("_calendar"))
@@ -379,7 +381,7 @@ async function handler(req: NextApiRequest & { userId?: number }) {
       uid: bookingToDelete.uid ?? "",
       destinationCalendar: bookingToDelete?.destinationCalendar || bookingToDelete?.user.destinationCalendar,
     };
-
+    
     const successPayment = bookingToDelete.payment.find((payment) => payment.success);
     if (!successPayment) {
       throw new Error("Cannot reject a booking without a successful payment");
@@ -455,13 +457,14 @@ async function handler(req: NextApiRequest & { userId?: number }) {
       },
       data: {
         status: BookingStatus.REJECTED,
+        cancellationReason: cancellationReason,
       },
     });
 
     // We skip the deletion of the event, because that would also delete the payment reference, which we should keep
     await apiDeletes;
     req.statusCode = 200;
-    return { message: "Booking successfully cancelled." };
+    return { message: "Booking successfully deleted." };
   }
 
   const attendeeDeletes = prisma.attendee.deleteMany({
@@ -493,13 +496,13 @@ async function handler(req: NextApiRequest & { userId?: number }) {
   });
 
   const prismaPromises: Promise<unknown>[] = [attendeeDeletes, bookingReferenceDeletes];
-
-  await Promise.all(prismaPromises.concat(apiDeletes));
-
-  await sendCancelledEmails(evt);
-
-  req.statusCode = 200;
-  return { message: "Booking successfully cancelled." };
-}
+  
+    await Promise.all(prismaPromises.concat(apiDeletes));
+  
+    //await sendCancelledEmails(evt);
+  
+    req.statusCode = 200;
+    return { message: "Booking successfully cancelled." };
+  }
 
 export default handler;

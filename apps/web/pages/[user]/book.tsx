@@ -1,5 +1,5 @@
 import type { GetServerSidePropsContext } from "next";
-
+import { JSONObject } from "superjson/dist/types";
 import type { LocationObject } from "@calcom/app-store/locations";
 import { privacyFilteredLocations } from "@calcom/app-store/locations";
 import { getAppFromSlug } from "@calcom/app-store/utils";
@@ -33,7 +33,7 @@ export type BookPageProps = inferSSRProps<typeof getServerSideProps>;
 export default function Book(props: BookPageProps) {
   const { t } = useLocale();
   return props.away ? (
-    <div className="h-screen dark:bg-gray-900">
+    <div className="h-screen dark:bg-neutral-900">
       <main className="mx-auto max-w-3xl px-4 py-24">
         <div className="space-y-6" data-testid="event-types">
           <div className="overflow-hidden rounded-sm border dark:border-gray-900">
@@ -48,7 +48,7 @@ export default function Book(props: BookPageProps) {
       </main>
     </div>
   ) : props.isDynamicGroupBooking && !props.profile.allowDynamicBooking ? (
-    <div className="h-screen dark:bg-gray-900">
+    <div className="h-screen dark:bg-neutral-900">
       <main className="mx-auto max-w-3xl px-4 py-24">
         <div className="space-y-6" data-testid="event-types">
           <div className="overflow-hidden rounded-sm border dark:border-gray-900">
@@ -119,10 +119,29 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
   if (!eventTypeRaw) return { notFound: true };
 
+  const credentials = await prisma.credential.findMany({
+    where: {
+      userId: {
+        in: users.map((user) => user.id),
+      },
+    },
+    select: {
+      id: true,
+      type: true,
+      key: true,
+    },
+  });
+
+  const web3Credentials = credentials.find((credential) => credential.type.includes("_web3"));
+
   const eventType = {
     ...eventTypeRaw,
     metadata: EventTypeMetaDataSchema.parse(eventTypeRaw.metadata || {}),
     recurringEvent: parseRecurringEvent(eventTypeRaw.recurringEvent),
+    isWeb3Active:
+      web3Credentials && web3Credentials.key
+        ? (((web3Credentials.key as JSONObject).isWeb3Active || false) as boolean)
+        : false,
   };
 
   const getLocations = () => {

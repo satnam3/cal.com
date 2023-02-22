@@ -295,7 +295,6 @@ async function ensureAvailableUsers(
         message: "Unable set isAvailableToBeBooked. Using true. ",
       });
     }
-    // no conflicts found, add to available users.
     if (!foundConflict) {
       availableUsers.push(user);
     }
@@ -331,15 +330,15 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   log.debug(`Booking eventType ${eventTypeId} started`);
 
   const eventType =
-    !eventTypeId && !!eventTypeSlug ? getDefaultEvent(eventTypeSlug) : await getEventTypesFromDB(eventTypeId);
-
+  !eventTypeId && !!eventTypeSlug ? getDefaultEvent(eventTypeSlug) : await getEventTypesFromDB(eventTypeId);
+  
   if (!eventType) throw new HttpError({ statusCode: 404, message: "eventType.notFound" });
-
-  const paymentAppData = getPaymentAppData(eventType);
-
-  // Check if required custom inputs exist
-  handleCustomInputs(eventType.customInputs as EventTypeCustomInput[], reqBody.customInputs);
-
+  
+    const paymentAppData = getPaymentAppData(eventType);
+  
+    // Check if required custom inputs exist
+    handleCustomInputs(eventType.customInputs as EventTypeCustomInput[], reqBody.customInputs);
+  
   let timeOutOfBounds = false;
   try {
     timeOutOfBounds = isOutOfBounds(reqBody.start, {
@@ -363,38 +362,38 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   if (timeOutOfBounds) {
     const error = {
       errorCode: "BookingTimeOutOfBounds",
-      message: `EventType '${eventType.eventName}' cannot be booked at this time.`,
+      message: `This artist is not available for this time slot.`,
     };
 
     throw new HttpError({ statusCode: 400, message: error.message });
   }
 
   const loadUsers = async () =>
-    !eventTypeId
-      ? await prisma.user.findMany({
-          where: {
-            username: {
-              in: dynamicUserList,
-            },
+  !eventTypeId
+    ? await prisma.user.findMany({
+        where: {
+          username: {
+            in: dynamicUserList,
           },
-          select: {
-            ...userSelect.select,
-            metadata: true,
-          },
-        })
-      : !!eventType.hosts?.length
-      ? eventType.hosts.map(({ user, isFixed }) => ({
-          ...user,
-          isFixed,
-        }))
-      : eventType.users;
-  // loadUsers allows type inferring
-  let users: (Awaited<ReturnType<typeof loadUsers>>[number] & {
-    isFixed?: boolean;
-    metadata?: Prisma.JsonValue;
-  })[] = await loadUsers();
+        },
+        select: {
+          ...userSelect.select,
+          metadata: true,
+        },
+      })
+    : !!eventType.hosts?.length
+    ? eventType.hosts.map(({ user, isFixed }) => ({
+        ...user,
+        isFixed,
+      }))
+    : eventType.users;
+// loadUsers allows type inferring
+let users: (Awaited<ReturnType<typeof loadUsers>>[number] & {
+  isFixed?: boolean;
+  metadata?: Prisma.JsonValue;
+})[] = await loadUsers();
 
-  const isDynamicAllowed = !users.some((user) => !user.allowDynamicBooking);
+const isDynamicAllowed = !users.some((user) => !user.allowDynamicBooking);
   if (!isDynamicAllowed && !eventTypeId) {
     throw new HttpError({
       message: "Some of the users in this group do not allow dynamic booking",
@@ -411,12 +410,12 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
       },
       ...userSelect,
     });
-    if (!eventTypeUser) throw new HttpError({ statusCode: 404, message: "eventTypeUser.notFound" });
+    if (!eventTypeUser) throw new HttpError({ statusCode: 404, message: "eventTypeUser.notFound" });    
     users.push(eventTypeUser);
   }
 
   if (!users) throw new HttpError({ statusCode: 404, message: "eventTypeUser.notFound" });
-
+  
   users = users.map((user) => ({
     ...user,
     isFixed:
@@ -431,28 +430,28 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   }
 
   if (!eventType.seatsPerTimeSlot) {
-    const availableUsers = await ensureAvailableUsers(
-      {
-        ...eventType,
-        users: users as IsFixedAwareUser[],
-        ...(eventType.recurringEvent && {
-          recurringEvent: {
-            ...eventType.recurringEvent,
-            count: recurringCount || eventType.recurringEvent.count,
-          },
-        }),
-      },
-      {
-        dateFrom: reqBody.start,
-        dateTo: reqBody.end,
-      },
-      {
-        allRecurringDates,
-        currentRecurringIndex,
-      }
-    );
+  const availableUsers = await ensureAvailableUsers(
+    {
+      ...eventType,
+      users: users as IsFixedAwareUser[],
+      ...(eventType.recurringEvent && {
+        recurringEvent: {
+          ...eventType.recurringEvent,
+          count: recurringCount || eventType.recurringEvent.count,
+        },
+      }),
+    },
+    {
+      dateFrom: reqBody.start,
+      dateTo: reqBody.end,
+    },
+    {
+      allRecurringDates,
+      currentRecurringIndex,
+    }
+  );
 
-    const luckyUsers: typeof users = [];
+  const luckyUsers: typeof users = [];
     const luckyUserPool = availableUsers.filter((user) => !user.isFixed);
     // loop through all non-fixed hosts and get the lucky users
     while (luckyUserPool.length > 0 && luckyUsers.length < 1 /* TODO: Add variable */) {
@@ -485,7 +484,7 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
 
   const [organizerUser] = users;
   const tOrganizer = await getTranslation(organizerUser.locale ?? "en", "common");
-
+  
   const invitee = [
     {
       email: reqBody.email,
@@ -522,7 +521,7 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   const customInputs = {} as NonNullable<CalendarEvent["customInputs"]>;
 
   const teamMemberPromises =
-    users.length > 1
+  users.length > 1
       ? users.slice(1).map(async function (user) {
           return {
             email: user.email || "",
@@ -652,7 +651,7 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
 
     const newSeat = booking.attendees.length !== 0;
 
-    /**
+     /**
      * Remember objects are passed into functions as references
      * so if you modify it in a inner function it will be modified in the outer function
      * deep cloning evt to avoid this
@@ -770,7 +769,7 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   if (rescheduleUid) {
     originalRescheduledBooking = await getOriginalRescheduledBooking(rescheduleUid);
   }
-  // If the user is not the owner of the event, new booking should be always pending.
+// If the user is not the owner of the event, new booking should be always pending.
   // Otherwise, an owner rescheduling should be always accepted.
   // Before comparing make sure that userId is set, otherwise undefined === undefined
   const userReschedulingIsOwner = userId && originalRescheduledBooking?.user?.id === userId;
@@ -801,7 +800,8 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
       endTime: dayjs.utc(evt.endTime).toDate(),
       description: evt.additionalNotes,
       customInputs: isPrismaObjOrUndefined(evt.customInputs),
-      status: isConfirmedByDefault ? BookingStatus.ACCEPTED : BookingStatus.PENDING,
+      //status: isConfirmedByDefault ? BookingStatus.ACCEPTED : BookingStatus.PENDING,
+      status: BookingStatus.PENDING,
       location: evt.location,
       eventType: eventTypeRel,
       smsReminderNumber: reqBody.smsReminderNumber,
@@ -847,6 +847,11 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
         newBookingData.recurringEventId = originalRescheduledBooking.recurringEventId;
       }
     }
+
+    if (req.body.coupon) {
+      newBookingData.coupon = req.body.coupon;
+    }
+
     const createBookingObj = {
       include: {
         user: {
@@ -896,7 +901,7 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
     await syncServicesUpdateWebUser(
       await prisma.user.findFirst({
         where: { id: userId },
-        select: { id: true, email: true, name: true, username: true, createdDate: true },
+        select: { id: true, email: true, name: true, plan: true,username: true, createdDate: true },
       })
     );
     evt.uid = booking?.uid ?? null;
@@ -1023,9 +1028,9 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
 
     results = createManager.results;
     referencesToCreate = createManager.referencesToCreate;
-
+    
     videoCallUrl = evt.videoCallData && evt.videoCallData.url ? evt.videoCallData.url : null;
-
+    
     if (results.length > 0 && results.every((res) => !res.success)) {
       const error = {
         errorCode: "BookingCreatingMeetingFailed",
@@ -1149,78 +1154,78 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   const metadata = videoCallUrl ? { videoCallUrl: getVideoCallUrl(evt) || videoCallUrl } : undefined;
   if (isConfirmedByDefault) {
     const eventTrigger: WebhookTriggerEvents = rescheduleUid
-      ? WebhookTriggerEvents.BOOKING_RESCHEDULED
-      : WebhookTriggerEvents.BOOKING_CREATED;
-    const subscriberOptions = {
-      userId: organizerUser.id,
-      eventTypeId,
-      triggerEvent: eventTrigger,
-    };
+    ? WebhookTriggerEvents.BOOKING_RESCHEDULED
+    : WebhookTriggerEvents.BOOKING_CREATED;
+  const subscriberOptions = {
+    userId: organizerUser.id,
+    eventTypeId,
+    triggerEvent: eventTrigger,
+  };
 
-    const subscriberOptionsMeetingEnded = {
-      userId: organizerUser.id,
-      eventTypeId,
-      triggerEvent: WebhookTriggerEvents.MEETING_ENDED,
-    };
+  const subscriberOptionsMeetingEnded = {
+    userId: organizerUser.id,
+    eventTypeId,
+    triggerEvent: WebhookTriggerEvents.MEETING_ENDED,
+  };
 
-    try {
-      const subscribersMeetingEnded = await getWebhooks(subscriberOptionsMeetingEnded);
+  try {
+    const subscribersMeetingEnded = await getWebhooks(subscriberOptionsMeetingEnded);
 
-      subscribersMeetingEnded.forEach((subscriber) => {
-        if (rescheduleUid && originalRescheduledBooking) {
-          cancelScheduledJobs(originalRescheduledBooking, undefined, true);
-        }
-        if (booking && booking.status === BookingStatus.ACCEPTED) {
-          scheduleTrigger(booking, subscriber.subscriberUrl, subscriber);
-        }
-      });
-    } catch (error) {
-      log.error("Error while running scheduledJobs for booking", error);
-    }
-
-    try {
-      // Send Webhook call if hooked to BOOKING_CREATED & BOOKING_RESCHEDULED
-      const subscribers = await getWebhooks(subscriberOptions);
-      console.log("evt:", {
-        ...evt,
-        metadata: reqBody.metadata,
-      });
-      const bookingId = booking?.id;
-
-      const eventTypeInfo: EventTypeInfo = {
-        eventTitle: eventType.title,
-        eventDescription: eventType.description,
-        requiresConfirmation: requiresConfirmation || null,
-        price: paymentAppData.price,
-        currency: eventType.currency,
-        length: eventType.length,
-      };
-
-      const promises = subscribers.map((sub) =>
-        sendPayload(sub.secret, eventTrigger, new Date().toISOString(), sub, {
-          ...evt,
-          ...eventTypeInfo,
-          bookingId,
-          rescheduleUid,
-          rescheduleStartTime: originalRescheduledBooking?.startTime
-            ? dayjs(originalRescheduledBooking?.startTime).utc().format()
-            : undefined,
-          rescheduleEndTime: originalRescheduledBooking?.endTime
-            ? dayjs(originalRescheduledBooking?.endTime).utc().format()
-            : undefined,
-          metadata: { ...metadata, ...reqBody.metadata },
-          eventTypeId,
-          status: "ACCEPTED",
-          smsReminderNumber: booking?.smsReminderNumber || undefined,
-        }).catch((e) => {
-          console.error(`Error executing webhook for event: ${eventTrigger}, URL: ${sub.subscriberUrl}`, e);
-        })
-      );
-      await Promise.all(promises);
-    } catch (error) {
-      log.error("Error while sending webhook", error);
-    }
+    subscribersMeetingEnded.forEach((subscriber) => {
+      if (rescheduleUid && originalRescheduledBooking) {
+        cancelScheduledJobs(originalRescheduledBooking, undefined, true);
+      }
+      if (booking && booking.status === BookingStatus.ACCEPTED) {
+        scheduleTrigger(booking, subscriber.subscriberUrl, subscriber);
+      }
+    });
+  } catch (error) {
+    log.error("Error while running scheduledJobs for booking", error);
   }
+
+  try {
+    // Send Webhook call if hooked to BOOKING_CREATED & BOOKING_RESCHEDULED
+    const subscribers = await getWebhooks(subscriberOptions);
+    console.log("evt:", {
+    ...evt,
+    metadata: reqBody.metadata,
+  });
+  const bookingId = booking?.id;
+
+  const eventTypeInfo: EventTypeInfo = {
+    eventTitle: eventType.title,
+    eventDescription: eventType.description,
+    requiresConfirmation: requiresConfirmation || null,
+    price: paymentAppData.price,
+    currency: eventType.currency,
+    length: eventType.length,
+  };
+
+  const promises = subscribers.map((sub) =>
+    sendPayload(sub.secret, eventTrigger, new Date().toISOString(), sub, {
+      ...evt,
+      ...eventTypeInfo,
+      bookingId,
+      rescheduleUid,
+      rescheduleStartTime: originalRescheduledBooking?.startTime
+      ? dayjs(originalRescheduledBooking?.startTime).utc().format()
+      : undefined,
+    rescheduleEndTime: originalRescheduledBooking?.endTime
+      ? dayjs(originalRescheduledBooking?.endTime).utc().format()
+      : undefined,
+    metadata: { ...metadata, ...reqBody.metadata },
+    eventTypeId,
+    status: "ACCEPTED",
+    smsReminderNumber: booking?.smsReminderNumber || undefined,
+    }).catch((e) => {
+      console.error(`Error executing webhook for event: ${eventTrigger}, URL: ${sub.subscriberUrl}`, e);
+    })
+  );
+  await Promise.all(promises);
+} catch (error) {
+  log.error("Error while sending webhook", error);
+}
+}
 
   // Avoid passing referencesToCreate with id unique constrain values
   // refresh hashed link if used
@@ -1228,52 +1233,52 @@ async function handler(req: NextApiRequest & { userId?: number | undefined }) {
   const hashedUid = translator.fromUUID(uuidv5(urlSeed, uuidv5.URL));
 
   try {
-    if (hasHashedBookingLink) {
-      await prisma.hashedLink.update({
-        where: {
-          link: reqBody.hashedLink as string,
-        },
-        data: {
-          link: hashedUid,
-        },
-      });
-    }
-  } catch (error) {
-    log.error("Error while updating hashed link", error);
+  if (hasHashedBookingLink) {
+    await prisma.hashedLink.update({
+      where: {
+        link: reqBody.hashedLink as string,
+      },
+      data: {
+        link: hashedUid,
+      },
+    });
   }
+} catch (error) {
+  log.error("Error while updating hashed link", error);
+}
 
   if (!booking) throw new HttpError({ statusCode: 400, message: "Booking failed" });
 
   try {
-    await prisma.booking.update({
-      where: {
-        uid: booking.uid,
-      },
-      data: {
-        metadata: { ...(typeof booking.metadata === "object" && booking.metadata), ...metadata },
-        references: {
-          createMany: {
-            data: referencesToCreate,
-          },
+  await prisma.booking.update({
+    where: {
+      uid: booking.uid,
+    },
+    data: {
+      metadata: { ...(typeof booking.metadata === "object" && booking.metadata), ...metadata },
+      references: {
+        createMany: {
+          data: referencesToCreate,
         },
       },
-    });
-  } catch (error) {
-    log.error("Error while creating booking references", error);
-  }
+    },
+  });
+} catch (error) {
+  log.error("Error while creating booking references", error);
+}
 
-  try {
-    await scheduleWorkflowReminders(
-      eventType.workflows,
-      reqBody.smsReminderNumber as string | null,
-      { ...evt, ...{ metadata } },
-      evt.requiresConfirmation || false,
-      rescheduleUid ? true : false,
-      true
-    );
-  } catch (error) {
-    log.error("Error while scheduling workflow reminders", error);
-  }
+try {
+  await scheduleWorkflowReminders(
+    eventType.workflows,
+    reqBody.smsReminderNumber as string | null,
+    { ...evt, ...{ metadata } },
+    evt.requiresConfirmation || false,
+    rescheduleUid ? true : false,
+    true
+  );
+} catch (error) {
+  log.error("Error while scheduling workflow reminders", error);
+}
 
   // booking successful
   req.statusCode = 201;

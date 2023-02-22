@@ -45,8 +45,8 @@ class MyDocument extends Document<Props> {
           <Script src="/embed-init-iframe.js" strategy="beforeInteractive" />
         </Head>
 
-        <body
-          className="dark:bg-darkgray-50 desktop-transparent bg-gray-100 antialiased"
+        <body 
+        className="dark:bg-darkgray-50 desktop-transparent bg-gray-100 antialiased"
           style={
             isEmbed
               ? {
@@ -61,6 +61,48 @@ class MyDocument extends Document<Props> {
           }>
           <Main />
           <NextScript nonce={nonce} />
+          {/* In case of Embed we want background to be transparent so that it merges into the website seamlessly. Also, we keep the body hidden here and embed logic would take care of showing the body when it's ready */}
+          {/* We are doing it on browser and not on server because there are some pages which are not SSRd */}
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                if (isEmbed()) {
+                  document.body.style.display="none";
+                  document.body.style.background="transparent";
+                }`,
+            }}
+          />
+
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+              var script = document.createElement('script');
+              script.setAttribute('driftly-api', 'A8IgEEviyg76ttMEeGOGkQnNTI3NuaSYSWOIguV4Y7Apx');
+              script.src = 'https://storage.googleapis.com/driftly-cdn/driftly-loader.umd.js'
+              document.head.appendChild(script);`,
+            }}
+          />
+
+          <script 
+            dangerouslySetInnerHTML = {{
+            __html: ` 
+            if (!isEmbed()) {
+              window.usetifulnotLoaded = 1 ;
+              window.init = function (w, d, s) {
+                if(window.usetifulnotLoaded){
+                  var a = d.getElementsByTagName('head')[0];
+                  var r = d.createElement('script');
+                  r.async = 1;
+                  r.src = s;
+                  r.setAttribute('id', 'usetifulScript');
+                  r.dataset.token = "c851b3d308c913f91bc06f8942e08616";
+                  a.appendChild(r);
+                  window.usetifulnotLoaded = 0;
+                }
+              }
+            }`,
+          }}
+          />
         </body>
       </Html>
     );

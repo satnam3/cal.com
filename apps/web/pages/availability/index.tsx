@@ -16,12 +16,23 @@ import SkeletonLoader from "@components/availability/SkeletonLoader";
 
 import { ssrInit } from "@server/lib/ssr";
 
+
+declare const window: any;
+
 export function AvailabilityList({ schedules }: RouterOutputs["viewer"]["availability"]["list"]) {
   const { t } = useLocale();
   const utils = trpc.useContext();
 
   const meQuery = trpc.viewer.me.useQuery();
-
+  
+  console.log('Satnam 1',meQuery)
+  /*
+  window.usetifulTags = {
+    userId: meQuery?.user.email,
+    userName: meQuery?.user.username,
+  };
+  window.init(window, document, "https://www.usetiful.com/dist/usetiful.js");
+  */
   const deleteMutation = trpc.viewer.availability.schedule.delete.useMutation({
     onMutate: async ({ scheduleId }) => {
       await utils.viewer.availability.list.cancel();
@@ -50,17 +61,17 @@ export function AvailabilityList({ schedules }: RouterOutputs["viewer"]["availab
       showToast(t("schedule_deleted_successfully"), "success");
     },
   });
-
-  const updateMutation = trpc.viewer.availability.schedule.update.useMutation({
-    onSuccess: async ({ schedule }) => {
-      await utils.viewer.availability.list.invalidate();
-      showToast(
-        t("availability_updated_successfully", {
-          scheduleName: schedule.name,
-        }),
-        "success"
-      );
-    },
+  
+    const updateMutation = trpc.viewer.availability.schedule.update.useMutation({
+      onSuccess: async ({ schedule }) => {
+        await utils.viewer.availability.list.invalidate();
+        showToast(
+          t("availability_updated_successfully", {
+            scheduleName: schedule.name,
+          }),
+          "success"
+        );
+      },
     onError: (err) => {
       if (err instanceof HttpError) {
         const message = `${err.statusCode}: ${err.message}`;
@@ -68,25 +79,25 @@ export function AvailabilityList({ schedules }: RouterOutputs["viewer"]["availab
       }
     },
   });
-
-  // Adds smooth delete button - item fades and old item slides into place
-
-  const [animationParentRef] = useAutoAnimate<HTMLUListElement>();
-
+  
+    // Adds smooth delete button - item fades and old item slides into place
+  
+    const [animationParentRef] = useAutoAnimate<HTMLUListElement>();
+  
   return (
     <>
       {schedules.length === 0 ? (
         <div className="flex justify-center">
-          <EmptyScreen
-            Icon={FiClock}
-            headline={t("new_schedule_heading")}
-            description={t("new_schedule_description")}
-            buttonRaw={<NewScheduleButton />}
-          />
+        <EmptyScreen
+          Icon={FiClock}
+          headline={t("new_schedule_heading")}
+          description={t("new_schedule_description")}
+          buttonRaw={<NewScheduleButton />}
+        />
         </div>
-      ) : (
-        <div className="mb-16 overflow-hidden rounded-md border border-gray-200 bg-white">
-          <ul className="divide-y divide-gray-200" data-testid="schedules" ref={animationParentRef}>
+            ) : (
+        <div className="-mx-4 mb-16 overflow-hidden rounded-sm border border-gray-200 sm:mx-0">
+          <ul className="divide-y divide-neutral-200" data-testid="schedules" ref={animationParentRef}>
             {schedules.map((schedule) => (
               <ScheduleListItem
                 displayOptions={{
