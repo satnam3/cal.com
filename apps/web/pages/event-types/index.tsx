@@ -387,74 +387,56 @@ export const EventTypeList = ({ group, groupIndex, readOnly, types }: EventTypeL
                           />
                         </Tooltip>
 
-                        <Tooltip side="top" content={t("copy_link") as string}>
-                          <Button
-                            color="secondary"
-                            variant="icon"
-                            className={classNames(
-                              type.$disabled
-                                ? " opacity-30"
-                                : "group-hover:text-white"
-                            )}
-                            StartIcon={FiLink}
-                            onClick={() => {
-                              showToast(t("link_copied"), "success");
-                              navigator.clipboard.writeText(calLink);
-                            }}
-                          />
-                        </Tooltip>
-                      <Dropdown modal={false}>
-                      <DropdownMenuTrigger asChild data-testid={"event-type-options-" + type.id}> 
-                          <Button
-                            type="button"
-                            variant="icon"
-                            color="secondary"
-                            StartIcon={FiMoreHorizontal}
-                            className={classNames(type.$disabled? " opacity-30": "group-hover:text-white")}
-                          />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem>
-                          <DropdownItem
-                          type="button"
-                          data-testid={"event-type-edit-" + type.id}
-                          StartIcon={FiEdit2}
-                          onClick={() => router.push("/event-types/" + type.id)}>
-                          {t("edit")}
-                        </DropdownItem>
-                      </DropdownMenuItem>
-                          <DropdownMenuItem className="outline-none">
-                            <DropdownItem
-                              type="button"
-                              data-testid={"event-type-duplicate-" + type.id}
-                              StartIcon={FiCopy}
-                              onClick={() => openDuplicateModal(type, group)}>
-                              {t("duplicate")}
-                            </DropdownItem>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem className="outline-none">
-                            <EmbedButton
-                              as={DropdownItem}
-                              type="button"
-                              StartIcon={FiCode}
-                              className={classNames("w-full rounded-none", type.$disabled && " pointer-events-none cursor-not-allowed opacity-30")}
-                              embedUrl={encodeURIComponent(embedLink)}>
-                              {t("embed")}
-                            </EmbedButton>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {/* readonly is only set when we are on a team - if we are on a user event type null will be the value. */}
-                          {(group.metadata?.readOnly === false || group.metadata.readOnly === null) && (
-                          <DropdownMenuItem>
-                              <DropdownItem
-                                color="destructive"
-                                  onClick={() => {
-                                    setDeleteDialogOpen(true);
-                                    setDeleteDialogTypeId(type.id);
-                                  }}
-                                  StartIcon={FiTrash}
-                                  className="w-full rounded-none">
-                                  {t("delete")}
+                        <ButtonGroup combined>
+                          <Tooltip content={t("preview")}>
+                            <Button
+                              data-testid="preview-link-button"
+                              color="secondary"
+                              target="_blank"
+                              variant="icon"
+                              href={calLink}
+                              StartIcon={FiExternalLink}
+                            />
+                          </Tooltip>
+
+                          <Tooltip content={t("copy_link")}>
+                            <Button
+                              color="secondary"
+                              variant="icon"
+                              StartIcon={FiLink}
+                              onClick={() => {
+                                showToast(t("link_copied"), "success");
+                                navigator.clipboard.writeText(calLink);
+                              }}
+                            />
+                          </Tooltip>
+                          <Dropdown modal={false}>
+                            <DropdownMenuTrigger asChild data-testid={"event-type-options-" + type.id}>
+                              <Button
+                                type="button"
+                                variant="icon"
+                                color="secondary"
+                                StartIcon={FiMoreHorizontal}
+                                className="ltr:radix-state-open:rounded-r-md rtl:radix-state-open:rounded-l-md"
+                              />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent>
+                              <DropdownMenuItem>
+                                <DropdownItem
+                                  type="button"
+                                  data-testid={"event-type-edit-" + type.id}
+                                  StartIcon={FiEdit2}
+                                  onClick={() => router.push("/event-types/" + type.id)}>
+                                  {t("edit")}
+                                </DropdownItem>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="outline-none">
+                                <DropdownItem
+                                  type="button"
+                                  data-testid={"event-type-duplicate-" + type.id}
+                                  StartIcon={FiCopy}
+                                  onClick={() => openDuplicateModal(type, group)}>
+                                  {t("duplicate")}
                                 </DropdownItem>
                               </DropdownMenuItem>
                             )}
